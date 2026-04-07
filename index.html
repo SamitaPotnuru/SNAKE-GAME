@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Snake Game</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a0a;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:'Segoe UI',system-ui,sans-serif;color:#e0e0e0;overflow:hidden}
+h1{font-size:2rem;margin-bottom:8px;background:linear-gradient(135deg,#00e676,#00b0ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:2px}
+#score{font-size:1.1rem;margin-bottom:12px;color:#aaa}
+#score span{color:#00e676;font-weight:700}
+canvas{border:2px solid #222;border-radius:8px;box-shadow:0 0 40px rgba(0,230,118,.15)}
+#msg{margin-top:16px;font-size:1rem;color:#777;min-height:1.4em}
+#instructions{margin-top:20px;background:#141414;border:1px solid #2a2a2a;border-radius:12px;padding:20px 28px;max-width:420px;width:100%;box-shadow:0 4px 20px rgba(0,0,0,.4)}
+#instructions h2{font-size:1rem;color:#00e676;margin-bottom:12px;letter-spacing:1px;text-transform:uppercase}
+#instructions ul{list-style:none;padding:0}
+#instructions li{padding:6px 0;font-size:.9rem;color:#999;border-bottom:1px solid #1e1e1e;display:flex;align-items:center;gap:10px}
+#instructions li:last-child{border-bottom:none}
+#instructions li span.key{background:#1e1e1e;color:#00e676;padding:2px 8px;border-radius:4px;font-size:.8rem;font-family:monospace;min-width:28px;text-align:center}
+#controls{display:none;margin-top:16px;gap:4px}
+#controls button{width:56px;height:56px;font-size:1.4rem;border:none;border-radius:12px;background:#1a1a1a;color:#ccc;cursor:pointer;touch-action:manipulation}
+#controls button:active{background:#00e676;color:#0a0a0a}
+@media(pointer:coarse){#controls{display:grid;grid-template-columns:repeat(3,56px);grid-template-rows:repeat(2,56px);justify-items:center}}
+</style>
+</head>
+<body>
+<h1>SNAKE GAME</h1>
+<div id="score">Score: <span id="sc">0</span> &nbsp;|&nbsp; Best: <span id="hi">0</span></div>
+<canvas id="c" width="400" height="400"></canvas>
+<div id="msg">Press any arrow key or tap to start</div>
+<div id="controls">
+<div></div><button id="bu">▲</button><div></div>
+<button id="bl">◀</button><button id="bd">▼</button><button id="br">▶</button>
+</div>
+<div id="instructions">
+<h2>📋 How to Play</h2>
+<ul>
+<li><span class="key">↑</span><span class="key">↓</span><span class="key">←</span><span class="key">→</span> Arrow keys to move</li>
+<li><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> Also works</li>
+<li>🍎 Eat the red food to grow &amp; score</li>
+<li>💀 Don't crash into yourself</li>
+<li>🌀 Walls wrap around to the other side</li>
+<li>🏆 High score saved automatically</li>
+</ul>
+</div>
+</div>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d'),S=20,W=c.width/S,H=c.height/S;
+let snake,dir,ndir,food,score,hi=+localStorage.getItem('snakeHi')||0,running=false,loop;
+document.getElementById('hi').textContent=hi;
+
+function init(){
+  snake=[{x:10,y:10}];dir={x:0,y:0};ndir={x:0,y:0};score=0;
+  document.getElementById('sc').textContent=0;
+  placeFood();draw();
+}
+
+function placeFood(){
+  do{food={x:Math.floor(Math.random()*W),y:Math.floor(Math.random()*H)}}
+  while(snake.some(s=>s.x===food.x&&s.y===food.y));
+}
+
+function draw(){
+  ctx.fillStyle='#111';ctx.fillRect(0,0,c.width,c.height);
+  // grid
+  ctx.strokeStyle='#1a1a1a';
+  for(let i=0;i<W;i++)for(let j=0;j<H;j++){ctx.strokeRect(i*S,j*S,S,S)}
+  // food
+  ctx.fillStyle='#ff1744';ctx.shadowColor='#ff1744';ctx.shadowBlur=12;
+  ctx.beginPath();ctx.arc(food.x*S+S/2,food.y*S+S/2,S/2-2,0,Math.PI*2);ctx.fill();
+  ctx.shadowBlur=0;
+  // snake
+  snake.forEach((s,i)=>{
+    const t=i/snake.length;
+    ctx.fillStyle=i===0?'#00e676':`hsl(145,${80-t*30}%,${55-t*20}%)`;
+    ctx.shadowColor='#00e676';ctx.shadowBlur=i===0?10:0;
+    roundRect(s.x*S+1,s.y*S+1,S-2,S-2,4);
+    ctx.shadowBlur=0;
+  });
+}
+
+function roundRect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.fill();}
+
+function step(){
+  dir=ndir;
+  const head={x:(snake[0].x+dir.x+W)%W,y:(snake[0].y+dir.y+H)%H};
+  if(snake.some(s=>s.x===head.x&&s.y===head.y)){gameOver();return;}
+  snake.unshift(head);
+  if(head.x===food.x&&head.y===food.y){
+    score++;document.getElementById('sc').textContent=score;
+    if(score>hi){hi=score;localStorage.setItem('snakeHi',hi);document.getElementById('hi').textContent=hi;}
+    placeFood();
+  }else snake.pop();
+  draw();
+}
+
+function gameOver(){
+  clearInterval(loop);running=false;
+  document.getElementById('msg').textContent='Game Over! Press any key to restart';
+  ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(0,0,c.width,c.height);
+  ctx.fillStyle='#fff';ctx.font='bold 28px sans-serif';ctx.textAlign='center';
+  ctx.fillText('GAME OVER',c.width/2,c.height/2-10);
+  ctx.font='16px sans-serif';ctx.fillText('Score: '+score,c.width/2,c.height/2+20);
+}
+
+function setDir(x,y){if(dir.x!==-x||dir.y!==-y)ndir={x,y};if(!running)start();}
+function start(){running=true;document.getElementById('msg').textContent='';init();ndir=ndir.x||ndir.y?ndir:{x:1,y:0};dir=ndir;loop=setInterval(step,110);}
+
+document.addEventListener('keydown',e=>{
+  if(!running&&['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){start();}
+  switch(e.key){case'ArrowUp':case'w':setDir(0,-1);break;case'ArrowDown':case's':setDir(0,1);break;case'ArrowLeft':case'a':setDir(-1,0);break;case'ArrowRight':case'd':setDir(1,0);break;}
+  e.preventDefault();
+});
+document.getElementById('bu').onclick=()=>setDir(0,-1);
+document.getElementById('bd').onclick=()=>setDir(0,1);
+document.getElementById('bl').onclick=()=>setDir(-1,0);
+document.getElementById('br').onclick=()=>setDir(1,0);
+
+// swipe
+let tx,ty;
+c.addEventListener('touchstart',e=>{tx=e.touches[0].clientX;ty=e.touches[0].clientY});
+c.addEventListener('touchend',e=>{
+  const dx=e.changedTouches[0].clientX-tx,dy=e.changedTouches[0].clientY-ty;
+  if(Math.abs(dx)>Math.abs(dy)){setDir(dx>0?1:-1,0)}else{setDir(0,dy>0?1:-1)}
+});
+
+init();
+</script>
+</body>
+</html>
